@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>사기널 — 티켓 양도 사기 탐지</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<style>
+:root {
+  --red:#e8341a; --yellow:#ffe100; --k:#111111; --w:#ffffff;
+  /* ▼ 배경색 조절 영역 ────────────────────────── */
+  --bg:#f5f0e8;   /* 메인 배경 (랜딩 화면) */
+  --g:#eceae2;    /* 카드 내부 밝은 배경 */
+  --g2:#d4d0c8;   /* 테두리 / 구분선 */
+  /* 히어로(첫화면) 배경은 CSS의 #heroScreen { background: ... } 에서 조절 */
+  /* ──────────────────────────────────────────── */
+  --m:#55504a; --safe:#15803d; --warn:#c47c00; --blue:#1a4fc4; --bluelt:#dce7ff;
+  --bw:3px; --r4:4px; --r8:8px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{font-family:'Noto Sans KR',sans-serif;color:var(--k);background:var(--bg);}
+.container{width:100%;max-width:800px;margin:0 auto;padding:0 28px;}
+@media(max-width:520px){.container{padding:0 16px;}}
+
+/* ── 화면 전환 ── */
+.screen{display:none;min-height:100vh;flex-direction:column;}
+.screen.active{display:flex;}
+
+/* ══════════════════════════════
+   히어로 화면
+══════════════════════════════ */
+#heroScreen{
+  background:var(--k);
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  overflow:hidden;
+}
+#heroScreen::before{
+  content:'';position:absolute;inset:0;
+  background-image:radial-gradient(circle,rgba(255,255,255,.04) 1px,transparent 1px);
+  background-size:28px 28px;pointer-events:none;
+}
+.hero-inner{
+  width:100%;max-width:640px;
+  padding:60px 28px 60px;
+  display:flex;flex-direction:column;
+  align-items:flex-start;
+  z-index:1;
+}
+@media(max-width:520px){.hero-inner{padding:40px 20px 48px;}}
+
+.hero-logo{
+  font-size:56px;font-weight:900;letter-spacing:-2px;
+  color:var(--w);line-height:1;margin-bottom:6px;
+  opacity:0;transform:translateY(20px);
+  transition:opacity .5s,transform .5s;
+}
+.hero-logo.vis{opacity:1;transform:none;}
+.hero-logo .r{color:var(--red);}
+.hero-tag{
+  font-size:14px;font-weight:500;color:rgba(255,255,255,.4);
+  margin-bottom:48px;
+  opacity:0;transition:opacity .5s .2s;
+}
+.hero-tag.vis{opacity:1;}
+
+/* 말풍선 */
+.chat-wrap{width:100%;display:flex;flex-direction:column;gap:10px;margin-bottom:36px;}
+.chat-row{display:flex;opacity:0;transform:translateY(10px);transition:opacity .4s,transform .4s;}
+.chat-row.right{justify-content:flex-end;}
+.chat-row.vis{opacity:1;transform:none;}
+.bbl{
+  max-width:72%;padding:11px 16px;
+  font-size:14px;line-height:1.6;font-weight:500;
+  word-break:break-word;
+  border:var(--bw) solid rgba(255,255,255,.15);
+}
+.bbl.them{background:rgba(255,255,255,.09);color:rgba(255,255,255,.7);border-radius:var(--r4) 16px 16px 16px;}
+.bbl.me{background:var(--w);color:var(--k);border-color:rgba(255,255,255,.3);border-radius:16px var(--r4) 16px 16px;}
+.bbl.scam{background:var(--red);color:var(--w);border-color:#b02010;border-radius:var(--r4) 16px 16px 16px;}
+.bbl .hl{background:var(--yellow);color:var(--k);padding:0 3px;border-radius:2px;font-weight:900;}
+.chat-cap{font-size:11px;color:rgba(255,255,255,.22);margin-top:4px;opacity:0;transition:opacity .5s;}
+.chat-cap.vis{opacity:1;}
+
+/* 카운터 */
+.hero-stat{
+  width:100%;border:var(--bw) solid rgba(255,255,255,.18);
+  border-radius:var(--r8);padding:20px 24px;
+  background:rgba(255,255,255,.05);margin-bottom:32px;
+  opacity:0;transform:translateY(16px);
+  transition:opacity .5s,transform .5s;
+}
+.hero-stat.vis{opacity:1;transform:none;}
+.hero-stat-label{font-size:10px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.35);text-transform:uppercase;margin-bottom:8px;}
+.hero-stat-num{font-size:60px;font-weight:900;color:var(--red);line-height:1;font-variant-numeric:tabular-nums;}
+.hero-stat-unit{font-size:20px;font-weight:700;color:rgba(255,255,255,.5);margin-left:6px;}
+.hero-stat-desc{font-size:13px;color:rgba(255,255,255,.45);margin-top:6px;}
+
+/* CTA */
+.hero-cta{
+  display:inline-flex;align-items:center;gap:10px;
+  height:60px;padding:0 32px;
+  background:var(--yellow);color:var(--k);
+  font-family:'Noto Sans KR',sans-serif;
+  font-size:18px;font-weight:900;letter-spacing:-.3px;
+  border:var(--bw) solid var(--k);border-radius:var(--r4);
+  cursor:pointer;text-decoration:none;
+  box-shadow:4px 4px 0 rgba(255,225,0,.4);
+  opacity:0;transform:translateY(12px);
+  transition:opacity .5s,transform .5s,translate .1s,box-shadow .1s;
+}
+.hero-cta.vis{opacity:1;transform:none;}
+.hero-cta:active{translate:2px 2px;box-shadow:2px 2px 0 rgba(255,225,0,.4);}
+
+/* ══════════════════════════════
+   랜딩 화면
+══════════════════════════════ */
+#landingScreen{background:var(--bg);}
+
+#topbar{
+  position:sticky;top:0;z-index:200;
+  background:var(--k);border-bottom:var(--bw) solid var(--k);
+  height:58px;flex-shrink:0;
+}
+#topbar .container{height:100%;display:flex;align-items:center;justify-content:space-between;}
+.top-logo{
+  font-size:22px;font-weight:900;color:var(--w);
+  cursor:pointer;display:flex;align-items:center;
+  letter-spacing:-1px;text-decoration:none;
+  transition:opacity .15s;
+}
+.top-logo:hover{opacity:.8;}
+.top-logo .r{color:var(--red);}
+.sig{display:flex;align-items:flex-end;gap:2px;margin-left:5px;}
+.sig i{display:block;background:var(--red);border-radius:1px;width:3px;animation:sig 1.3s ease-in-out infinite;}
+.sig i:nth-child(1){height:5px;animation-delay:0s}
+.sig i:nth-child(2){height:9px;animation-delay:.2s}
+.sig i:nth-child(3){height:13px;animation-delay:.4s}
+@keyframes sig{0%,100%{opacity:.2}50%{opacity:1}}
+.quota-chip{font-size:12px;font-weight:700;color:var(--w);background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.22);border-radius:999px;padding:5px 13px;}
+
+/* 메인 그리드 */
+.landing-body{flex:1;padding:36px 0 60px;}
+.landing-body .container{
+  display:grid;
+  grid-template-columns:3fr 1fr;
+  gap:28px;align-items:start;
+}
+@media(max-width:700px){
+  .landing-body .container{grid-template-columns:1fr;gap:20px;}
+  .landing-body{padding:24px 0 48px;}
+}
+
+/* ── 분석기 카드 ── */
+.az-card{
+  background:var(--w);
+  border:var(--bw) solid var(--k);
+  border-radius:var(--r8);
+  box-shadow:5px 5px 0 var(--k);
+  overflow:hidden;
+}
+.az-hd{
+  background:var(--k);padding:14px 20px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.az-hd-title{font-size:13px;font-weight:900;letter-spacing:1.5px;color:var(--w);text-transform:uppercase;}
+.az-body{padding:20px;}
+
+/* 모드 카드 */
+.mode-cards{display:flex;gap:10px;margin-bottom:18px;}
+.mode-card{
+  flex:1;border:var(--bw) solid var(--g2);
+  border-radius:var(--r8);padding:14px 12px;
+  cursor:pointer;background:var(--bg);
+  transition:all .15s;position:relative;
+}
+.mode-card.on{background:var(--k);border-color:var(--k);box-shadow:3px 3px 0 var(--red);}
+.mc-chip{
+  display:inline-block;font-size:9px;font-weight:900;
+  letter-spacing:1px;text-transform:uppercase;
+  padding:2px 7px;border-radius:2px;margin-bottom:8px;
+  background:var(--g2);color:var(--m);border:1.5px solid var(--g2);
+}
+.mode-card.on .mc-chip{background:var(--red);color:var(--w);border-color:var(--red);}
+.mc-title{font-size:15px;font-weight:900;color:var(--k);margin-bottom:4px;}
+.mode-card.on .mc-title{color:var(--w);}
+.mc-desc{font-size:11px;color:var(--m);line-height:1.5;}
+.mode-card.on .mc-desc{color:rgba(255,255,255,.5);}
+.mc-chk{
+  position:absolute;top:8px;right:8px;
+  width:18px;height:18px;border-radius:50%;
+  border:2px solid var(--g2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:900;color:var(--w);
+  transition:all .15s;
+}
+.mode-card.on .mc-chk{background:var(--red);border-color:var(--red);}
+.mode-card.on .mc-chk::after{content:'✓';}
+
+/* API */
+.api-row{display:none;gap:8px;margin-bottom:12px;}
+.api-row.on{display:flex;}
+.api-in{
+  flex:1;height:42px;border:var(--bw) solid var(--g2);
+  border-radius:var(--r4);padding:0 12px;
+  font-family:'Noto Sans KR',sans-serif;font-size:13px;
+  outline:none;background:var(--bg);transition:border-color .15s;
+}
+.api-in:focus{border-color:var(--k);}
+.api-sv{
+  height:42px;padding:0 14px;
+  border:var(--bw) solid var(--k);
+  background:var(--k);color:var(--w);
+  border-radius:var(--r4);
+  font-family:'Noto Sans KR',sans-serif;
+  font-size:12px;font-weight:700;cursor:pointer;
+  box-shadow:2px 2px 0 var(--red);
+  transition:box-shadow .1s,translate .1s;
+}
+.api-sv:active{translate:1px 1px;box-shadow:1px 1px 0 var(--red);}
+.api-ok{font-size:11px;font-weight:700;color:var(--safe);margin-bottom:10px;display:none;}
+.api-ok.on{display:block;}
+
+/* 스위치 */
+.sw-row{display:flex;gap:8px;margin-bottom:14px;}
+.sw{
+  flex:1;height:36px;
+  border:var(--bw) solid var(--g2);border-radius:var(--r4);
+  background:var(--bg);
+  font-family:'Noto Sans KR',sans-serif;
+  font-size:12px;font-weight:700;color:var(--m);
+  cursor:pointer;transition:all .15s;
+}
+.sw.on{border-color:var(--k);background:var(--k);color:var(--w);box-shadow:2px 2px 0 var(--red);}
+.demo-notice{
+  background:var(--yellow);border:var(--bw) solid var(--k);
+  border-radius:var(--r4);padding:9px 13px;
+  font-size:12px;color:var(--k);font-weight:700;
+  line-height:1.55;margin-bottom:14px;
+  display:none;box-shadow:2px 2px 0 var(--k);
+}
+.demo-notice.on{display:block;}
+
+/* 텍스트 입력 */
+.paste-box{border:var(--bw) solid var(--g2);border-radius:var(--r8);overflow:hidden;background:var(--w);margin-bottom:10px;transition:border-color .15s;}
+.paste-box:focus-within{border-color:var(--k);}
+.paste-ta{width:100%;height:130px;border:none;outline:none;resize:none;padding:14px;font-family:'Noto Sans KR',sans-serif;font-size:14px;line-height:1.65;color:var(--k);background:transparent;}
+.paste-ta::placeholder{color:#bbb;}
+.parse-btn{width:100%;height:44px;border:none;border-top:var(--bw) solid var(--g2);background:var(--g);font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:700;color:var(--k);cursor:pointer;transition:background .15s;}
+.parse-btn:hover{background:var(--g2);}
+.input-hint{font-size:12px;color:var(--m);line-height:1.65;margin-bottom:12px;}
+
+/* 원문 하이라이트 */
+.raw-hl-wrap{display:none;border:var(--bw) solid var(--g2);border-radius:var(--r8);overflow:hidden;background:var(--w);margin-bottom:10px;}
+.raw-hl-wrap.on{display:block;}
+.raw-hl-hd{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:var(--bw) solid var(--g2);background:var(--g);}
+.raw-hl-hd span{font-size:12px;font-weight:700;color:var(--m);}
+.raw-hl-body{padding:14px;font-size:13px;line-height:1.9;color:var(--k);max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;}
+.raw-hl-body::-webkit-scrollbar{display:none}
+.raw-hit{background:var(--yellow);color:var(--k);padding:1px 4px;border-radius:2px;font-weight:800;cursor:pointer;border-bottom:2px solid var(--red);}
+.raw-hit:hover{background:#ffd000;}
+.bub-reset{border:none;background:none;font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:700;color:var(--m);cursor:pointer;text-decoration:underline;padding:3px 0;}
+
+/* 말풍선 */
+.bub-guide{font-size:12px;color:var(--m);line-height:1.65;background:#fffbeb;border:var(--bw) solid #fde68a;border-radius:var(--r4);padding:10px 12px;margin-bottom:10px;}
+.bub-guide strong{color:var(--k);font-weight:700;}
+.bub-list{display:flex;flex-direction:column;gap:5px;max-height:240px;overflow-y:auto;}
+.bub-list::-webkit-scrollbar{display:none}
+.bub-row{display:flex;align-items:flex-start;gap:5px;}
+.bub-row.me{flex-direction:row-reverse;}
+.bub-content{display:flex;flex-direction:column;gap:3px;max-width:76%;}
+.bub-row.me .bub-content{align-items:flex-end;}
+.bub-txt{padding:8px 12px;font-size:13px;line-height:1.5;word-break:break-word;background:var(--g);color:var(--k);border-radius:3px 12px 12px 12px;cursor:pointer;border:1.5px solid var(--g2);}
+.bub-row.me .bub-txt{background:var(--bluelt);color:var(--blue);border-color:#bfdbfe;border-radius:12px 3px 12px 12px;}
+.bub-txt.highlighted{background:#ffe5e1!important;border:2px solid var(--red)!important;color:var(--k)!important;}
+.bub-hit-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--red);background:#ffe5e1;border-radius:2px;padding:1px 5px;margin-top:3px;}
+.bub-lbl{font-size:10px;font-weight:700;color:var(--m);padding-top:9px;white-space:nowrap;flex-shrink:0;}
+.bub-row.me .bub-lbl{color:var(--blue);}
+.bub-acts{display:flex;gap:3px;margin-top:2px;}
+.bub-edit-btn{border:none;background:none;cursor:pointer;font-size:11px;color:var(--m);padding:2px 5px;border-radius:2px;font-family:'Noto Sans KR',sans-serif;}
+.bub-edit-wrap{display:none;margin-top:3px;}
+.bub-edit-wrap.show{display:block;}
+.bub-edit-ta{width:100%;border:var(--bw) solid var(--red);border-radius:var(--r4);padding:7px 10px;font-family:'Noto Sans KR',sans-serif;font-size:13px;outline:none;resize:none;min-height:56px;background:var(--w);}
+.bub-edit-row{display:flex;gap:5px;margin-top:4px;}
+.bub-edit-ok{flex:1;height:30px;border:var(--bw) solid var(--k);background:var(--red);color:#fff;border-radius:var(--r4);font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+.bub-edit-cancel{flex:1;height:30px;border:var(--bw) solid var(--g2);background:none;border-radius:var(--r4);font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:var(--m);}
+
+/* 이미지 */
+.img-zone{display:none;min-height:100px;border:var(--bw) dashed var(--g2);border-radius:var(--r8);flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;padding:18px;text-align:center;background:var(--bg);transition:border-color .15s,background .15s;}
+.img-zone.on{display:flex;}
+.img-zone:hover,.img-zone.drag{border-color:var(--k);background:var(--yellow);}
+.iz-t{font-size:13px;font-weight:700;color:var(--m);}
+.iz-s{font-size:11px;color:#aaa;}
+.prev-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;width:100%;}
+.prev-item{position:relative;border-radius:var(--r4);overflow:hidden;aspect-ratio:1;border:var(--bw) solid var(--k);}
+.prev-item img{width:100%;height:100%;object-fit:cover;display:block;}
+.prev-del{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:var(--k);color:#fff;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;}
+.lq-warn{display:none;font-size:12px;font-weight:700;color:#be123c;background:#fff1f2;border:var(--bw) solid #fca5a5;border-radius:var(--r4);padding:7px 11px;margin-top:7px;}
+.lq-warn.on{display:block;}
+.extracted-wrap{display:none;margin-top:10px;}
+.extracted-wrap.on{display:block;}
+
+/* 개인정보 */
+.pi-box{display:none;background:#fffbeb;border:var(--bw) solid #fde68a;border-radius:var(--r8);padding:12px;margin-bottom:10px;}
+.pi-box.on{display:block;}
+.pi-ttl{font-size:13px;font-weight:700;color:#92400e;margin-bottom:4px;}
+.pi-item{display:flex;align-items:center;gap:7px;padding:5px 0;font-size:13px;border-bottom:1px solid #fde68a;}
+.pi-item:last-of-type{border-bottom:none;}
+.pi-item input{accent-color:var(--red);}
+mark{background:var(--yellow);border-radius:2px;padding:1px 4px;}
+.pi-btns{display:flex;gap:7px;margin-top:8px;}
+.pi-btns button{flex:1;height:38px;border-radius:var(--r4);font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:var(--bw) solid var(--k);}
+.pi-btns .p1{background:var(--red);color:#fff;box-shadow:2px 2px 0 var(--k);}
+.pi-btns .p2{background:var(--bg);color:var(--k);}
+
+/* 분석 버튼 */
+.ana-submit{
+  width:100%;height:56px;
+  border:var(--bw) solid var(--k);
+  background:var(--red);color:var(--w);
+  border-radius:var(--r4);
+  font-family:'Noto Sans KR',sans-serif;
+  font-size:18px;font-weight:900;
+  cursor:pointer;margin-top:6px;letter-spacing:-.3px;
+  box-shadow:4px 4px 0 var(--k);
+  transition:box-shadow .1s,translate .1s,opacity .2s;
+}
+.ana-submit:active{translate:2px 2px;box-shadow:2px 2px 0 var(--k);}
+.ana-submit:disabled{opacity:.5;cursor:not-allowed;}
+
+/* 결과 */
+.result-wrap{margin-top:20px;}
+.result-empty{
+  padding:32px 18px;text-align:center;
+  color:var(--m);font-size:13px;line-height:1.7;
+  border:var(--bw) solid var(--g2);border-radius:var(--r8);background:var(--bg);
+}
+.result-empty .ic{font-size:28px;margin-bottom:8px;opacity:.35;}
+.r-ext-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px;}
+.ext-pill{padding:6px 12px;border:var(--bw) solid var(--k);border-radius:var(--r4);font-size:12px;font-weight:700;color:var(--k);text-decoration:none;background:var(--w);box-shadow:2px 2px 0 var(--k);transition:translate .1s,box-shadow .1s;}
+.ext-pill:active{translate:1px 1px;box-shadow:1px 1px 0 var(--k);}
+
+.result-card{border:var(--bw) solid var(--k);border-radius:var(--r8);background:var(--w);overflow:hidden;box-shadow:4px 4px 0 var(--k);}
+.rsk-head{padding:20px 20px 0;}
+.rsk-row{display:flex;align-items:flex-end;gap:12px;margin-bottom:8px;}
+.rsk-pct{font-size:64px;font-weight:900;line-height:1;}
+.rsk-rhs{padding-bottom:6px;}
+.r-badge{display:inline-block;padding:4px 12px;border-radius:var(--r4);font-size:12px;font-weight:900;margin-bottom:4px;border:var(--bw) solid var(--k);}
+.r-summ{font-size:12px;color:var(--m);line-height:1.5;max-width:180px;}
+.r-type-list{margin-top:4px;max-width:200px;}
+.type-bullet{font-size:12px;font-weight:700;color:var(--k);line-height:1.7;}
+.type-bullet-none{font-size:12px;color:var(--m);line-height:1.5;}
+.bar-bg{height:8px;background:var(--g);overflow:hidden;margin:0 0 14px;border-top:var(--bw) solid var(--g2);border-bottom:var(--bw) solid var(--g2);}
+.bar-fill{height:100%;width:0;transition:width 1s cubic-bezier(.16,1,.3,1);}
+.caution-strip{margin:0 20px 14px;padding:9px 12px;background:var(--yellow);border-radius:var(--r4);border:var(--bw) solid var(--k);font-size:11px;color:var(--k);line-height:1.6;font-weight:700;box-shadow:2px 2px 0 var(--k);}
+.warn-banner{margin:0 20px 10px;padding:10px 13px;border-radius:var(--r4);font-size:12px;line-height:1.55;border:var(--bw) solid;}
+.warn-banner strong{display:block;margin-bottom:2px;font-size:13px;}
+.warn-banner.red{background:#fff5f4;border-color:var(--red);color:#9a3412;box-shadow:2px 2px 0 var(--red);}
+.warn-banner.orange{background:#fff7ed;border-color:#ea580c;color:#9a3412;box-shadow:2px 2px 0 #ea580c;}
+.pat-sec{padding:6px 20px 0;}
+.pat-sec-ttl{font-size:18px;font-weight:900;margin-bottom:14px;}
+.pat-list{display:flex;flex-direction:column;gap:14px;}
+.pat-card{border-radius:var(--r8);padding:16px;border:var(--bw) solid var(--k);background:var(--w);}
+.pat-card.hi{background:#fff5f4;box-shadow:3px 3px 0 var(--red);}
+.pat-card.md{background:#fffbeb;box-shadow:3px 3px 0 var(--warn);}
+.pat-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.pat-no{width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;border:2px solid var(--k);}
+.pat-no.hi{background:var(--red)}.pat-no.md{background:var(--warn)}.pat-no.lo{background:#888}
+.pat-ttl{font-size:14px;font-weight:900;}
+.pat-why{font-size:13px;color:var(--k);line-height:1.65;margin-bottom:12px;font-weight:500;}
+.pat-bub-label{font-size:10px;font-weight:900;color:var(--red);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;}
+.pat-bubble{
+  display:block;background:var(--w);
+  border:var(--bw) solid var(--red);
+  border-radius:var(--r4) 14px 14px 14px;
+  padding:11px 14px;
+  font-size:13px;line-height:1.6;color:var(--k);font-weight:500;
+  word-break:break-word;cursor:pointer;
+  box-shadow:3px 3px 0 var(--red);
+  transition:translate .1s,box-shadow .1s;
+}
+.pat-bubble:active{translate:1px 1px;box-shadow:2px 2px 0 var(--red);}
+.pat-bubble b{color:var(--red);font-weight:900;background:#ffe0dc;border-radius:2px;padding:0 2px;}
+.pat-bubble-hint{font-size:10px;color:var(--m);margin-top:5px;}
+.bot-sec{padding:14px 20px 20px;display:flex;flex-direction:column;gap:10px;}
+.act-box{border-radius:var(--r8);padding:14px;border:var(--bw) solid var(--k);}
+.act-box.action{background:var(--yellow);box-shadow:3px 3px 0 var(--k);}
+.act-box.tip{background:var(--bg);}
+.act-ttl{font-size:14px;font-weight:900;margin-bottom:8px;}
+.act-row{display:flex;gap:6px;align-items:flex-start;padding:3px 0;font-size:12px;line-height:1.5;}
+.act-dot{width:5px;height:5px;border-radius:50%;background:var(--k);flex-shrink:0;margin-top:5px;}
+.act-box.tip .act-dot{background:var(--m);}
+.ext-row{display:flex;gap:7px;flex-wrap:wrap;}
+
+/* ── 오른쪽 컬럼 ── */
+.col-info{display:flex;flex-direction:column;gap:20px;}
+
+/* 패널은 col-info 너비에 구애받지 않도록 */
+.sub-panel{display:none;border:var(--bw) solid var(--k);border-radius:var(--r8);background:var(--w);overflow:hidden;box-shadow:4px 4px 0 var(--k);min-width:320px;}
+.stat-mini{border:var(--bw) solid var(--k);border-radius:var(--r8);background:var(--w);padding:16px;box-shadow:3px 3px 0 var(--k);}
+.stat-mini-label{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--m);text-transform:uppercase;margin-bottom:6px;}
+.stat-mini-num{font-size:32px;font-weight:900;color:var(--red);line-height:1;margin-bottom:3px;}
+.stat-mini-desc{font-size:12px;color:var(--m);}
+.stat-mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.stat-mini-cell{background:var(--g);border:1.5px solid var(--g2);border-radius:var(--r4);padding:10px;}
+.stat-mini-cell .sn{font-size:18px;font-weight:900;color:var(--red);line-height:1;margin-bottom:2px;}
+.stat-mini-cell .sd{font-size:10px;color:var(--m);line-height:1.4;}
+
+.info-sec-title{font-size:22px;font-weight:900;line-height:1.15;margin-bottom:12px;letter-spacing:-1px;}
+.info-btn-stack{display:flex;flex-direction:column;gap:8px;}
+.info-btn{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:13px 16px;
+  border:var(--bw) solid var(--k);border-radius:var(--r8);
+  background:var(--yellow);cursor:pointer;
+  font-family:'Noto Sans KR',sans-serif;
+  box-shadow:3px 3px 0 var(--k);
+  transition:translate .1s,box-shadow .1s;
+  width:100%;text-align:left;
+}
+.info-btn:active{translate:2px 2px;box-shadow:1px 1px 0 var(--k);}
+.info-btn-left{display:flex;flex-direction:column;gap:2px;}
+.info-btn-icon{font-size:18px;margin-bottom:2px;}
+.info-btn-title{font-size:14px;font-weight:900;color:var(--k);}
+.info-btn-desc{font-size:11px;color:var(--m);line-height:1.45;}
+.info-btn-arr{flex-shrink:0;color:var(--k);}
+
+.mi{font-family:'Material Icons Round';font-style:normal;font-size:22px;line-height:1;vertical-align:middle;display:inline-block;}
+.mi.sm{font-size:18px;}
+.mi.lg{font-size:28px;}
+
+/* 서브 패널 — 노란색 */
+.sub-panel{display:none;border:var(--bw) solid var(--k);border-radius:var(--r8);background:var(--w);overflow:hidden;box-shadow:4px 4px 0 var(--k);}
+.sub-panel.open{display:block;}
+.sub-panel-hd{background:var(--yellow);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:var(--bw) solid var(--k);}
+.sub-panel-hd-title{font-size:14px;font-weight:900;color:var(--k);display:flex;align-items:center;gap:7px;}
+.sub-close{width:28px;height:28px;border-radius:50%;border:var(--bw) solid var(--k);background:none;color:var(--k);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+.sub-close:hover{background:rgba(0,0,0,.08);}
+.sub-body{padding:20px;}
+
+/* 체크리스트 */
+.cl-tabs{display:flex;background:var(--bg);border-radius:var(--r4);padding:3px;margin-bottom:16px;border:var(--bw) solid var(--g2);}
+.cl-tab{flex:1;height:36px;border:none;background:none;border-radius:var(--r4);font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:700;color:var(--m);cursor:pointer;transition:all .15s;}
+.cl-tab.on{background:var(--k);color:var(--w);box-shadow:2px 2px 0 var(--red);}
+.cl-sec{display:none;}.cl-sec.on{display:block;}
+.cl-badge{display:inline-block;font-size:10px;font-weight:900;padding:3px 10px;border-radius:var(--r4);margin-bottom:12px;border:var(--bw) solid var(--k);}
+.cl-badge.a{background:var(--red);color:#fff;}
+.cl-badge.c{background:var(--yellow);color:var(--k);}
+.cl-card{display:flex;gap:12px;padding:14px;background:var(--bg);border:var(--bw) solid var(--g2);border-radius:var(--r8);margin-bottom:10px;}
+.cl-num{width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff;border:2px solid var(--k);}
+.cl-num.a{background:var(--red);}
+.cl-num.c{background:var(--k);}
+.cl-body strong{display:block;font-size:14px;font-weight:800;margin-bottom:4px;}
+.cl-body p{font-size:13px;color:var(--m);line-height:1.6;}
+.cl-body a{color:var(--blue);font-weight:800;}
+.cl-body strong.hot{color:var(--red);}
+.ex-btn{margin-left:8px;height:26px;padding:0 10px;border:var(--bw) solid var(--k);border-radius:var(--r4);background:var(--k);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+.acc-res{padding:9px 12px;border-radius:var(--r4);font-size:13px;margin-bottom:12px;display:none;border:var(--bw) solid;}
+.acc-res.show{display:block;}
+.acc-res.safe{background:#eef9f0;border-color:var(--safe);color:var(--safe);}
+.acc-res.warn{background:var(--yellow);border-color:var(--k);color:var(--k);}
+
+/* 신고절차 */
+.rsc-wrap{border:var(--bw) solid var(--g2);border-radius:var(--r8);overflow:hidden;margin-bottom:16px;}
+.rsc-row{display:flex;gap:12px;padding:13px 16px;border-bottom:var(--bw) solid var(--g2);}
+.rsc-row:last-child{border-bottom:none;}
+.rsc-badge{padding:4px 9px;border-radius:var(--r4);font-size:11px;font-weight:900;white-space:nowrap;flex-shrink:0;height:fit-content;margin-top:2px;border:1.5px solid var(--k);}
+.rsc-body strong{display:block;font-size:14px;font-weight:700;margin-bottom:2px;}
+.rsc-body p{font-size:12px;color:var(--m);line-height:1.55;}
+.link-stack{display:flex;flex-direction:column;gap:8px;}
+.lnk{display:flex;align-items:center;justify-content:center;height:46px;border-radius:var(--r4);font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:900;text-decoration:none;border:var(--bw) solid var(--k);transition:translate .1s,box-shadow .1s;}
+.lnk:active{translate:1px 1px;box-shadow:none;}
+.lnk.red{background:var(--red);color:#fff;box-shadow:3px 3px 0 var(--k);}
+.lnk.dark{background:var(--k);color:#fff;box-shadow:3px 3px 0 var(--red);}
+
+/* 푸터 */
+.footer{background:var(--k);border-top:var(--bw) solid var(--k);padding:28px 0;text-align:center;margin-top:auto;}
+.footer-logo{font-size:20px;font-weight:900;color:var(--w);margin-bottom:6px;}
+.footer-logo .r{color:var(--red);}
+.footer-desc{font-size:12px;color:rgba(255,255,255,.4);line-height:1.7;margin-bottom:5px;}
+.footer-email{font-size:12px;font-weight:700;color:var(--yellow);text-decoration:none;}
+
+/* 로딩 오버레이 */
+#imgLoadingOverlay{display:none;position:fixed;inset:0;z-index:9000;background:rgba(17,17,17,.92);flex-direction:column;align-items:center;justify-content:center;gap:18px;}
+#imgLoadingOverlay.on{display:flex;}
+.ilo-spinner{width:48px;height:48px;border-radius:50%;border:4px solid rgba(255,255,255,.2);border-top-color:var(--red);animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ilo-txt{font-size:15px;font-weight:700;color:var(--w);text-align:center;}
+.ilo-sub{font-size:12px;color:rgba(255,255,255,.5);text-align:center;}
+.ilo-dots span{animation:dotPulse 1.2s ease-in-out infinite;}
+.ilo-dots span:nth-child(2){animation-delay:.2s}.ilo-dots span:nth-child(3){animation-delay:.4s}
+@keyframes dotPulse{0%,80%,100%{opacity:.2}40%{opacity:1}}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════
+   히어로 화면
+══════════════════════════ -->
+<div id="heroScreen" class="screen active">
+  <div class="hero-inner">
+    <div class="hero-logo" id="hLogo"><span class="r">사기</span>널</div>
+    <div class="hero-tag" id="hTag">티켓 양도 거래 중 사기꾼 잡아내기</div>
+
+    <div class="chat-wrap">
+      <div class="chat-row right" id="cb0"><div class="bbl me">안녕하세요! 아이유 콘서트 티켓 구매 가능한가요?</div></div>
+      <div class="chat-row" id="cb1"><div class="bbl them">네~ 2층 B구역 2연석이요 ㅎㅎ 정가에 드릴게요!</div></div>
+      <div class="chat-row right" id="cb2"><div class="bbl me">입금 완료했습니다~!</div></div>
+      <div class="chat-row" id="cb3"><div class="bbl scam">앗 구매자님~ ㅠㅠ 입금자명이 <span class="hl">계정명</span>이 아니셔서 확인이 안 되시는데요...</div></div>
+      <div class="chat-row" id="cb4"><div class="bbl scam"><span class="hl">계정명으로 다시 입금</span>해주시면 처음 입금액은 자동 환불돼요!</div></div>
+      <div class="chat-row right" id="cb5"><div class="bbl me">네??? 뭔 소리세요???</div></div>
+    </div>
+    <div class="chat-cap" id="chatCap">*제작자의 실제 피해 사례를 재구성한 대화입니다.</div>
+
+    <div class="hero-stat" id="hStat">
+      <div class="hero-stat-label">사기널 데이터베이스</div>
+      <div>
+        <span class="hero-stat-num" id="heroNum">0</span>
+        <span class="hero-stat-unit">건의</span>
+      </div>
+      <div class="hero-stat-desc">실제 티켓 양도 사기 사례를 기반으로 제작되었습니다.</div>
+    </div>
+
+    <button class="hero-cta" id="hCta" onclick="goLanding()">
+      사기 확률 검사하기 →
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════
+   랜딩 화면
+══════════════════════════ -->
+<div id="landingScreen" class="screen">
+  <div id="topbar">
+    <div class="container">
+      <a href="#" class="top-logo" onclick="goHero();return false;">
+        <span class="r">사기</span>널
+        <div class="sig"><i></i><i></i><i></i></div>
+      </a>
+      <div class="quota-chip">분석 <span id="qd">2</span>/2</div>
+    </div>
+  </div>
+
+  <div class="landing-body">
+    <div class="container">
+
+      <!-- 왼쪽: 분석기 -->
+      <div>
+        <div class="az-card">
+          <div class="az-hd"><span class="az-hd-title" style="display:flex;align-items:center;gap:6px"><span class="mi sm" style="color:var(--yellow)">manage_search</span> 사기 확률 분석기</span></div>
+          <div class="az-body">
+            <div class="mode-cards">
+              <div class="mode-card on" id="cardDemo" onclick="setMode('demo')">
+                <div class="mc-chk"></div>
+                <div class="mc-chip">무제한</div>
+                <div class="mc-title">체험판</div>
+                <div class="mc-desc">키워드 기반 분석<br>텍스트만 가능</div>
+              </div>
+              <div class="mode-card" id="cardAI" onclick="setMode('ai')">
+                <div class="mc-chk"></div>
+                <div class="mc-chip">하루 2회</div>
+                <div class="mc-title">정밀 분석</div>
+                <div class="mc-desc">Gemini AI 기반<br>이미지 분석 가능</div>
+              </div>
+            </div>
+
+            <div class="api-row" id="apiRow" style="display:none!important"></div>
+            <div class="api-ok" id="apiOk" style="display:none!important"></div>
+
+            <div class="sw-row" id="swRow" style="display:none">
+              <button class="sw on" id="swText" onclick="setInput('text')">텍스트</button>
+              <button class="sw" id="swImg" onclick="setInput('image')">이미지</button>
+            </div>
+            <div class="demo-notice on" id="demoNotice">
+              📸 정밀 분석을 하면 <strong>대화 캡처본</strong>도 분석 가능해요!
+            </div>
+
+            <div id="textArea">
+              <div id="pasteStep">
+                <div class="paste-box">
+                  <textarea class="paste-ta" id="rawPaste" placeholder="대화 내역을 붙여넣으세요. 화자 구분이 안 돼도 괜찮아요!"></textarea>
+                  <button class="parse-btn" onclick="parseBubbles()">텍스트 미세조정하기</button>
+                </div>
+                <p class="input-hint">분석 후 위험 문장이 원문에 하이라이트로 표시됩니다.</p>
+              </div>
+              <div class="raw-hl-wrap" id="rawHlWrap">
+                <div class="raw-hl-hd">
+                  <span>원문 — 위험 문장 하이라이트 (클릭 시 결과로 이동)</span>
+                  <button class="bub-reset" onclick="resetAll()">다시 입력</button>
+                </div>
+                <div class="raw-hl-body" id="rawHlBody"></div>
+              </div>
+              <div id="previewStep" style="display:none;border:var(--bw) solid var(--g2);border-radius:var(--r8);padding:12px;background:var(--w);margin-bottom:10px">
+                <div class="bub-guide"><strong>내가 보낸 말풍선을 눌러 파란색으로 바꿔주세요!</strong><br>바꾸지 않아도 분석은 되지만 정확도가 높아집니다.</div>
+                <div class="bub-list" id="bubList"></div>
+                <div style="display:flex;justify-content:flex-end;margin-top:5px">
+                  <button class="bub-reset" onclick="resetAll()">다시 붙여넣기</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="img-zone" id="imgZone"
+              ondragover="event.preventDefault();this.classList.add('drag')"
+              ondragleave="this.classList.remove('drag')"
+              ondrop="onDrop(event)"
+              onclick="document.getElementById('fIn').click()">
+              <div id="izPh"><div class="iz-t">클릭 · 드래그 · Ctrl+V</div><div class="iz-s">최대 6장 · 큰 이미지는 자동 압축</div></div>
+              <div class="prev-grid" id="prevGrid" style="display:none"></div>
+            </div>
+            <div class="lq-warn" id="lqWarn">저해상도 이미지 포함 — 정확도가 낮을 수 있어요.</div>
+            <input type="file" id="fIn" accept="image/*" multiple style="display:none" onchange="onFSel(event)">
+
+            <div class="extracted-wrap" id="extractedWrap">
+              <div class="raw-hl-wrap on" style="margin-bottom:0">
+                <div class="raw-hl-hd"><span>📋 이미지에서 추출된 대화</span></div>
+                <div class="raw-hl-body" id="extractedBody"></div>
+              </div>
+            </div>
+
+            <div class="pi-box" id="piBox">
+              <div class="pi-ttl">개인정보로 추정되는 단어가 감지되었습니다</div>
+              <p style="font-size:12px;color:var(--m);margin-bottom:7px">내 정보에 해당하는 것만 선택해 가린 뒤 분석하세요.</p>
+              <div id="piList"></div>
+              <div class="pi-btns">
+                <button class="p1" onclick="procPI(true)">가리고 분석하기</button>
+                <button class="p2" onclick="procPI(false)">그냥 분석하기</button>
+              </div>
+            </div>
+
+            <button class="ana-submit" id="subBtn" onclick="runAna()"><span class="mi sm" style="vertical-align:middle;margin-right:4px">manage_search</span> 분석하기</button>
+          </div>
+        </div>
+
+        <div class="result-wrap">
+          <div class="result-empty" id="rEmpty">
+            <div class="ic"><span class="mi" style="font-size:32px;opacity:.3">manage_search</span></div>
+            분석 결과가 여기에 표시됩니다.<br>
+            <span style="font-size:11px">키워드가 없어도 사기일 수 있으니 입금 전 꼭 확인하세요.</span>
+            <div class="r-ext-row">
+              <a href="https://thecheat.co.kr" target="_blank" class="ext-pill">더치트</a>
+              <a href="https://www.tikigate.com/" target="_blank" class="ext-pill">Tiki</a>
+            </div>
+          </div>
+          <div id="rContent" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- 오른쪽 -->
+      <div class="col-info">
+        <div class="stat-mini">
+          <div class="stat-mini-label">Fraud Statistics</div>
+          <div class="stat-mini-num">59,837</div>
+          <div class="stat-mini-desc">2024년까지 티켓·상품권 사기 신고 건수</div>
+          <div class="stat-mini-grid">
+            <div class="stat-mini-cell"><div class="sn">51.1%</div><div class="sd">암표 거래 경험자 중 피해 비율</div></div>
+            <div class="stat-mini-cell"><div class="sn">10배</div><div class="sd">8년간 증가한 피해율 (2016→2024)</div></div>
+          </div>
+          <div style="font-size:10px;color:var(--m);margin-top:10px;line-height:1.6;opacity:.6;">출처: 더치트, 국민권익위원회 (2024)</div>
+        </div>
+
+        <div>
+          <div class="info-sec-title">추가로<br>확인해보세요!</div>
+          <div class="info-btn-stack">
+            <button class="info-btn" onclick="togglePanel('authPanel')">
+              <div class="info-btn-left">
+                <span class="mi info-btn-icon">verified_user</span>
+                <div class="info-btn-title">인증요청 가이드</div>
+                <div class="info-btn-desc">올바른 인증 요청법</div>
+              </div>
+              <span class="mi info-btn-arr">chevron_right</span>
+            </button>
+            <button class="info-btn" onclick="togglePanel('rescuePanel')">
+              <div class="info-btn-left">
+                <span class="mi info-btn-icon">campaign</span>
+                <div class="info-btn-title">만약 사기당했다면?</div>
+                <div class="info-btn-desc">신고 절차 & 대응 방법</div>
+              </div>
+              <span class="mi info-btn-arr">chevron_right</span>
+            </button>
+          </div>
+        </div>
+
+    </div><!-- /col-info -->
+  </div><!-- /container grid -->
+
+  <!-- 패널 — 그리드 밖, 전체 너비 -->
+  <div class="container" style="margin-top:0;padding-top:0;">
+
+    <div class="sub-panel" id="authPanel" style="grid-column:1/-1;margin-top:0;">
+      <div class="sub-panel-hd">
+        <span class="sub-panel-hd-title"><span class="mi sm">verified_user</span> 인증요청 가이드</span>
+        <button class="sub-close" onclick="closePanel('authPanel')"><span class="mi sm">close</span></button>
+      </div>
+      <div class="sub-body">
+        <div class="cl-tabs">
+          <button class="cl-tab on" onclick="switchCL(0)">인증 요청 방법</button>
+          <button class="cl-tab" onclick="switchCL(1)">입금 전 확인</button>
+        </div>
+        <div class="cl-sec on" id="cl0">
+          <span class="cl-badge a">거래 전 판매자에게 요청하세요</span>
+          <div class="cl-card"><div class="cl-num a">1</div><div class="cl-body"><strong class="hot">화면 멀티탭 인증 (가장 효과적)</strong><button type="button" class="ex-btn" onclick="openMultitabModal()">예시</button><p>예매내역과 다른 앱이 함께 보이도록 캡처 요청. 예매자명과 입금주 이름을 대조하세요.</p></div></div>
+          <div class="cl-card"><div class="cl-num a">2</div><div class="cl-body"><strong>예매내역 밝기 올려서 확인</strong><p>조작된 이미지는 화면 밝기를 최대로 올리면 경계선이 드러납니다.</p></div></div>
+          <div class="cl-card"><div class="cl-num a">3</div><div class="cl-body"><strong>특정 문구 포함 인증 요청</strong><p>오늘 날짜 + 판매자 정보 적은 포스트잇과 함께 예매내역 촬영 요청.</p></div></div>
+        </div>
+        <div class="cl-sec" id="cl1">
+          <span class="cl-badge c">입금 전 반드시 확인하세요</span>
+          <div class="cl-card"><div class="cl-num c">1</div><div class="cl-body"><strong>더치트·Tiki 조회</strong><p>더치트에서 계좌·전화 사기 이력 / Tiki에서 계정 변경 이력 확인</p><p style="margin-top:5px"><a href="https://thecheat.co.kr" target="_blank">더치트</a> <a href="https://www.tikigate.com/" target="_blank" style="margin-left:8px">Tiki</a></p></div></div>
+          <div class="cl-card" style="flex-direction:column;gap:10px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><div class="cl-num c">2</div><div class="cl-body"><strong>적금 계좌 여부 확인</strong><p>무한 개설 가능한 적금 계좌는 더치트에 없을 수 있어요.</p></div></div>
+            <div style="display:flex;gap:7px">
+              <input type="text" id="accIn" placeholder="계좌번호 입력" style="flex:1;height:38px;border:var(--bw) solid var(--g2);border-radius:var(--r4);padding:0 10px;font-size:12px;outline:none;font-family:'Noto Sans KR',sans-serif;background:var(--bg)">
+              <button onclick="checkAcc()" style="height:38px;padding:0 12px;border:var(--bw) solid var(--k);background:var(--k);color:#fff;border-radius:var(--r4);font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;box-shadow:2px 2px 0 var(--red)">조회</button>
+            </div>
+            <div class="acc-res" id="accRes"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-panel" id="rescuePanel">
+      <div class="sub-panel-hd">
+        <span class="sub-panel-hd-title"><span class="mi sm">campaign</span> 만약 사기당했다면?</span>
+        <button class="sub-close" onclick="closePanel('rescuePanel')"><span class="mi sm">close</span></button>
+      </div>
+      <div class="sub-body">
+        <div class="rsc-wrap">
+          <div class="rsc-row"><span class="rsc-badge" style="background:#ffe5e1;color:var(--red)">즉시</span><div class="rsc-body"><strong>추가 입금 즉시 중단</strong><p>대화·계좌번호·게시글·입금내역을 캡처해 보관하세요.</p></div></div>
+          <div class="rsc-row"><span class="rsc-badge" style="background:var(--yellow);color:var(--k)">신고</span><div class="rsc-body"><strong>더치트 등록 + ECRM 접수</strong><p>더치트에 피해 계좌 등록, 사이버범죄 신고시스템 접수.</p></div></div>
+          <div class="rsc-row"><span class="rsc-badge" style="background:#eef9f0;color:var(--safe)">추적</span><div class="rsc-body"><strong>경찰서 방문 + 지급정지</strong><p>고소장 접수 후 은행에 지급정지 요청.</p></div></div>
+        </div>
+        <div class="link-stack">
+          <a href="https://thecheat.co.kr" target="_blank" class="lnk red">더치트 바로가기 →</a>
+          <a href="https://ecrm.police.go.kr" target="_blank" class="lnk dark">사이버범죄 신고시스템 →</a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /panel container -->
+
+  <div class="footer">
+    <div class="container">
+      <div class="footer-logo"><span class="r">사기</span>널</div>
+      <div class="footer-desc">158건의 실제 사기 사례 기반 · Gemini AI 정밀 분석<br>오류·제보·문의는 아래 이메일로 보내주세요.</div>
+      <a class="footer-email" href="mailto:dotolimuk100@gmail.com">dotolimuk100@gmail.com</a>
+    </div>
+  </div>
+</div>
+
+<div id="imgLoadingOverlay">
+  <div class="ilo-spinner"></div>
+  <div style="text-align:center">
+    <div class="ilo-txt">이미지 분석 중입니다<span class="ilo-dots"><span>.</span><span>.</span><span>.</span></span></div>
+    <div class="ilo-sub" id="iloSub">AI가 대화 내용을 읽고 있어요</div>
+  </div>
+</div>
+
+<div id="multitabModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.8);align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--w);border-radius:var(--r8);max-width:380px;width:100%;overflow:hidden;position:relative;border:var(--bw) solid var(--k);box-shadow:6px 6px 0 var(--k)">
+    <button onclick="document.getElementById('multitabModal').style.display='none'" style="position:absolute;top:10px;right:10px;width:30px;height:30px;border-radius:50%;background:var(--k);color:#fff;border:none;font-size:16px;cursor:pointer;z-index:10">×</button>
+    <div style="padding:16px 16px 8px"><h3 style="font-size:14px;font-weight:900">멀티탭 인증 예시</h3><p style="font-size:11px;color:#666;margin-top:3px">앱 전환 화면에서 예매내역과 다른 앱이 함께 보이도록 캡처 요청</p></div>
+    <img src="image.png" style="width:100%;display:block">
+  </div>
+</div>
+
+<script>
+const DAILY=2;
+
+/* ══ 히어로 애니메이션 ══ */
+function runHeroAnim(){
+  setTimeout(()=>document.getElementById('hLogo').classList.add('vis'),100);
+  setTimeout(()=>document.getElementById('hTag').classList.add('vis'),350);
+  ['cb0','cb1','cb2','cb3','cb4','cb5'].forEach((id,i)=>{
+    setTimeout(()=>document.getElementById(id).classList.add('vis'), 800+i*480);
+  });
+  setTimeout(()=>document.getElementById('chatCap').classList.add('vis'), 800+6*480+200);
+  const sd=800+6*480+600;
+  setTimeout(()=>{
+    document.getElementById('hStat').classList.add('vis');
+    let v=0;const el=document.getElementById('heroNum');
+    const t=setInterval(()=>{v+=3;if(v>=158){v=158;clearInterval(t);}el.textContent=v;},18);
+  },sd);
+  setTimeout(()=>document.getElementById('hCta').classList.add('vis'),sd+800);
+}
+
+function goLanding(){
+  document.getElementById('heroScreen').classList.remove('active');
+  document.getElementById('landingScreen').classList.add('active');
+  window.scrollTo(0,0);
+}
+function goHero(){
+  document.getElementById('landingScreen').classList.remove('active');
+  document.getElementById('heroScreen').classList.add('active');
+}
+
+/* ══ 패널 ══ */
+function togglePanel(id){
+  const p=document.getElementById(id);
+  const wasOpen=p.classList.contains('open');
+  document.querySelectorAll('.sub-panel').forEach(el=>el.classList.remove('open'));
+  if(!wasOpen){p.classList.add('open');setTimeout(()=>p.scrollIntoView({behavior:'smooth',block:'start'}),50);}
+}
+function closePanel(id){document.getElementById(id).classList.remove('open');}
+
+/* ══ 체크리스트 ══ */
+const clTabs=document.querySelectorAll('.cl-tab');
+function switchCL(i){clTabs.forEach((t,j)=>t.classList.toggle('on',j===i));document.getElementById('cl0').classList.toggle('on',i===0);document.getElementById('cl1').classList.toggle('on',i===1);}
+
+/* ══ 계좌 ══ */
+function normAcc(s){return s.replace(/[-\s]/g,'');}
+function isSavingsAcc(raw){
+  const n=normAcc(raw);if(n.length<10)return null;
+  const checks=[{bank:'국민은행',len:14,fn:n=>['03','23','26'].includes(n.slice(4,6))},{bank:'농협',len:11,fn:n=>['04','34','47','49','59'].includes(n.slice(3,5))},{bank:'농협',len:12,fn:n=>['04','34','47','49','59'].includes(n.slice(4,6))},{bank:'농협',len:13,fn:n=>['304','334','347','349','359','004','034','047','049','059'].includes(n.slice(0,3))},{bank:'케이뱅크',len:12,fn:n=>n.startsWith('1102')},{bank:'토스뱅크',len:12,fn:n=>n.startsWith('300')},{bank:'카카오뱅크',len:13,fn:n=>n.slice(1,4)==='355'},{bank:'기업은행',len:14,fn:n=>n.slice(9,11)==='14'}];
+  for(const c of checks)if(n.length===c.len&&c.fn(n))return c.bank;
+  return null;
+}
+function checkAcc(){
+  const v=document.getElementById('accIn').value.trim();
+  if(!v){alert('계좌번호를 입력해주세요.');return;}
+  const bank=isSavingsAcc(v);const el=document.getElementById('accRes');el.classList.add('show');
+  if(bank){el.className='acc-res show warn';el.textContent='⚠ 주의: '+bank+' 적금계좌 의심! 더치트에서 반드시 조회하세요.';}
+  else{el.className='acc-res show safe';el.textContent='✓ 적금계좌는 아니에요. 더치트에서 사기 이력도 꼭 확인하세요.';}
+}
+
+/* ══ 사기 DB ══ */
+const SCAM_ACCOUNTS=[{account:'09180204085966',bank:'국민은행',name:'박미영',initial:'ㅂㅁㅇ'},{account:'3333-24-0620715',bank:'카카오뱅크',name:'정인규',initial:'ㅈㅇㄱ'},{account:'359-1135-7141-21',bank:'농협은행',name:'이일재',initial:'ㅇㅇㅈ'},{account:'633826-04-122072',bank:'국민은행',name:'조성욱',initial:'ㅈㅅㅇ'},{account:'352-2351-6044-19',bank:'농협은행',name:'천샛별',initial:'ㅊㅅㅂ'},{account:'352-1057-1052-93',bank:'농협은행',name:'전경환',initial:'ㅈㄱㅎ'},{account:'30380204372387',bank:'국민은행',name:'김윤산',initial:'ㄱㅇㅅ'},{account:'3526-20318-4239',bank:'농협은행',name:'김진',initial:'ㄱㅈ'},{account:'3333-32-7835075',bank:'카카오뱅크',name:'기세진',initial:'ㄱㅅㅈ'},{account:'3120039660491',bank:'농협은행',name:'윤은희',initial:'ㅇㅇㅎ'},{account:'303802-04-372387',bank:'국민은행',name:'김윤산',initial:'ㄱㅇㅅ'},{account:'303803-04-334586',bank:'국민은행',name:'김윤산',initial:'ㄱㅇㅅ'},{account:'384-1498-5362-53',bank:'농협은행',name:'ㅈㅅㅊ',initial:'ㅈㅅㅊ'},{account:'126302-04-172720',bank:'국민은행',name:'허성영',initial:'ㅎㅅㅇ'}];
+const SCAM_IDS=['@badatiket_','@n_nny51','@asdgpk','@MOZllTICKETS_09','@salIoticket__08','@vd4zye','@r1lillkjy1b__7','@tkijijjiijijtko','@i1ji2j1ik2','@wkdnd_xlzpt','@aseiql','@0td1ci','@simpsonsticket1','@jjaawoongs_tk','@boanbticketing_','@ljijlijIjllI1iI','@TICKETjuju','@GOOD_NICE_TIC','@zkfmxpf1','@rrqwe123tiuq','@aiji_2__iji5','@s0nana9','@mewmewmIIlwt','@llimli1am','@Ilovelliio1','@googoo_3355','@IoolIIlllIllIo','@bIIloet_ticket5','@DoruTicket','@magnotticket77','@plall0Ticket77','@yeonmo_momo','@noop_oopdp','@soul_ticket','@prestigeticket_','@IlllIIoIIIll','@neubang8671','@skqlsxx','@gigantic_ts_','@lvdmmn','@TicketsCon6t','@megoetticket77'];
+function toChosung(str){const cho=['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];return str.split('').map(c=>{const code=c.charCodeAt(0)-0xAC00;if(code<0||code>11171)return c;return cho[Math.floor(code/28/21)];}).join('');}
+const JUNK_RE=[/^[오전후]+\s*\d+:\d+$/,/^\d{4}[년.]\s*\d{1,2}[월.]\s*\d{1,2}/,/^-+$/,/^={3,}$/,/^읽음$/,/^전송됨$/,/^전달됨$/];
+function isJunk(l){return JUNK_RE.some(p=>p.test(l.trim()))||l.trim().length<1;}
+function checkScamDB(text){const hits=[];SCAM_ACCOUNTS.forEach(sc=>{if(normAcc(text).includes(normAcc(sc.account))||text.includes(sc.account))hits.push({type:'account',data:sc,matched:sc.account});if(sc.name&&sc.name.length>=2&&!sc.name.match(/^[ㄱ-ㅎ]+$/)&&text.includes(sc.name)&&!hits.some(h=>h.data===sc))hits.push({type:'name',data:sc,matched:sc.name});});SCAM_IDS.forEach(id=>{if(text.toLowerCase().includes(id.toLowerCase())||text.toLowerCase().includes(id.slice(1).toLowerCase()))hits.push({type:'twitter',matched:id});});return hits;}
+function findAccounts(text){const pat=/\d{2,6}[-\s]\d{2,6}[-\s]\d{2,8}(?:[-\s]\d{1,6})?/g;const res=[];let m;while((m=pat.exec(text))!==null){const bank=isSavingsAcc(m[0]);if(bank)res.push({raw:m[0],bank});}return res;}
+
+/* ══ API/쿼터 ══ */
+function todayStr(){return new Date().toDateString();}
+function getQ(){return JSON.parse(localStorage.getItem('sag_q_'+todayStr())||'{"c":0}');}
+function saveQ(q){localStorage.setItem('sag_q_'+todayStr(),JSON.stringify(q));document.getElementById('qd').textContent=Math.max(0,DAILY-q.c);}
+document.getElementById('qd').textContent=Math.max(0,DAILY-getQ().c);
+const savedK=localStorage.getItem('sag_key');
+if(savedK){document.getElementById('apiIn').value=savedK;document.getElementById('apiOk').classList.add('on');}
+function saveKey(){const v=document.getElementById('apiIn').value.trim();if(!v)return;localStorage.setItem('sag_key',v);document.getElementById('apiOk').classList.add('on');}
+
+/* ══ 모드/입력방식 ══ */
+let anaMode='demo',inMode='text';
+function setMode(m){anaMode=m;document.getElementById('cardDemo').classList.toggle('on',m==='demo');document.getElementById('cardAI').classList.toggle('on',m==='ai');document.getElementById('apiRow').classList.toggle('on',m==='ai');if(m==='demo'){document.getElementById('swRow').style.display='none';document.getElementById('demoNotice').classList.add('on');setInput('text');}else{document.getElementById('swRow').style.display='flex';document.getElementById('demoNotice').classList.remove('on');}}
+function setInput(m){inMode=m;document.getElementById('swText').classList.toggle('on',m==='text');document.getElementById('swImg').classList.toggle('on',m==='image');document.getElementById('textArea').style.display=m==='text'?'block':'none';document.getElementById('imgZone').classList.toggle('on',m==='image');if(m==='text')document.getElementById('extractedWrap').classList.remove('on');}
+
+/* ══ 말풍선 ══ */
+let bubbles=[];
+function parseBubbles(){const raw=document.getElementById('rawPaste').value.trim();if(!raw){alert('대화를 먼저 입력해주세요.');return;}bubbles=raw.split('\n').filter(l=>!isJunk(l)).map(l=>({text:l.trim(),isMe:false}));renderBubbles();document.getElementById('pasteStep').style.display='none';document.getElementById('previewStep').style.display='block';}
+function renderBubbles(hlMap){const list=document.getElementById('bubList');list.innerHTML=bubbles.map((b,i)=>{const hi=hlMap&&hlMap[i];const tc='bub-txt'+(hi?' highlighted':'');const tag=hi?`<div class="bub-hit-tag">⚠ ${eH(hi)}</div>`:'';return `<div class="${b.isMe?'bub-row me':'bub-row'}" id="br${i}">${b.isMe?'<div class="bub-lbl">나</div>':''}<div class="bub-content"><div class="${tc}" onclick="toggleBub(${i})">${eH(b.text)}</div>${tag}<div class="bub-acts"><button class="bub-edit-btn" onclick="event.stopPropagation();toggleEdit(${i})">✏ 수정</button></div><div class="bub-edit-wrap" id="bew${i}"><textarea class="bub-edit-ta" id="beta${i}" rows="2">${eH(b.text)}</textarea><div class="bub-edit-row"><button class="bub-edit-ok" onclick="saveEdit(${i})">확인</button><button class="bub-edit-cancel" onclick="cancelEdit(${i})">취소</button></div></div></div>${!b.isMe?'<div class="bub-lbl">상대</div>':''}</div>`;}).join('');}
+function toggleBub(i){bubbles[i].isMe=!bubbles[i].isMe;renderBubbles();}
+function toggleEdit(i){const el=document.getElementById('bew'+i);el.classList.toggle('show');if(el.classList.contains('show'))document.getElementById('beta'+i).focus();}
+function saveEdit(i){const v=document.getElementById('beta'+i).value.trim();if(v)bubbles[i].text=v;renderBubbles();}
+function cancelEdit(i){document.getElementById('bew'+i).classList.remove('show');}
+function resetAll(){bubbles=[];document.getElementById('rawPaste').value='';document.getElementById('pasteStep').style.display='block';document.getElementById('previewStep').style.display='none';document.getElementById('rawHlWrap').classList.remove('on');}
+function getOpText(){return bubbles.length>0?bubbles.filter(b=>!b.isMe).map(b=>b.text).join('\n'):document.getElementById('rawPaste').value.trim();}
+function getMyText(){return bubbles.filter(b=>b.isMe).map(b=>b.text).join('\n');}
+
+/* ══ 원문 하이라이트 ══ */
+function renderRawHl(hits){
+  const raw=document.getElementById('rawPaste').value;if(!raw)return;
+  document.getElementById('pasteStep').style.display='none';
+  document.getElementById('previewStep').style.display='none';
+  const wrap=document.getElementById('rawHlWrap');wrap.classList.add('on');
+  const body=document.getElementById('rawHlBody');
+  const hitPairs=hits.map((h,i)=>({q:(h.q||h.quote||'').trim(),idx:i,title:h.ti||h.title||''})).filter(x=>x.q);
+  let html='';
+  raw.split('\n').forEach(line=>{
+    if(!line.trim()){html+='\n';return;}
+    let rendered=eH(line);
+    hitPairs.forEach(({q,idx,title})=>{try{rendered=rendered.replace(new RegExp(eRe(eH(q)),'g'),`<span class="raw-hit" id="rawHit${idx}" onclick="scrollToCard(${idx})" title="${eH(title)}">${eH(q)}</span>`);}catch(e){}});
+    html+=rendered+'\n';
+  });
+  body.innerHTML=html;
+}
+function scrollToCard(idx){const card=document.getElementById('patCard'+idx);if(card){card.scrollIntoView({behavior:'smooth',block:'center'});card.style.outline='2px solid var(--red)';setTimeout(()=>card.style.outline='',1200);}}
+
+/* ══ 이미지 ══ */
+let imgs=[];
+document.addEventListener('paste',e=>{if(inMode!=='image')return;[...e.clipboardData.items].filter(i=>i.type.startsWith('image/')).forEach(i=>addI(i.getAsFile()));});
+function onDrop(e){e.preventDefault();e.currentTarget.classList.remove('drag');[...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')).forEach(addI);}
+function onFSel(e){[...e.target.files].forEach(addI);e.target.value='';}
+function addI(f){if(imgs.length>=6){alert('최대 6장');return;}compI(f).then(r=>{imgs.push(r);renderPrev();});}
+function compI(f){return new Promise(res=>{const r=new FileReader();r.onload=()=>{const img=new Image();img.onload=()=>{const ow=img.naturalWidth,oh=img.naturalHeight,s=Math.min(1,1400/Math.max(ow,oh)),w=Math.round(ow*s),h=Math.round(oh*s),c=document.createElement('canvas');c.width=w;c.height=h;const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0,w,h);const url=c.toDataURL('image/jpeg',.85);res({name:f.name||'이미지',dataUrl:url,base64:url.split(',')[1],mime:'image/jpeg',lowQ:Math.min(ow,oh)<520||ow<700||oh<700});};img.src=r.result;};r.readAsDataURL(f);});}
+function renderPrev(){const pg=document.getElementById('prevGrid'),ph=document.getElementById('izPh');if(!imgs.length){ph.style.display='flex';pg.style.display='none';document.getElementById('lqWarn').classList.remove('on');return;}ph.style.display='none';pg.style.display='grid';pg.innerHTML=imgs.map((f,i)=>`<div class="prev-item"><img src="${f.dataUrl}"><button class="prev-del" onclick="event.stopPropagation();remI(${i})">×</button></div>`).join('');document.getElementById('lqWarn').classList.toggle('on',imgs.some(f=>f.lowQ));}
+function remI(i){imgs.splice(i,1);renderPrev();}
+
+/* ══ 개인정보 ══ */
+let piC=[],pendO='',pendM='';
+function detPI(t){const ps=[{tp:'전화번호',re:/01[016789]-\d{3,4}-\d{4}/g},{tp:'계좌번호',re:/\d{3,6}-\d{2,6}-\d{4,8}(?:-\d{1,6})?/g}];const f=[];ps.forEach(({tp,re})=>{(t.match(re)||[]).forEach(v=>{const c=v.trim();if(c.length>=4&&!f.some(x=>x.v===c))f.push({tp,v:c});});});return f;}
+function maskT(t,vs){let r=t;vs.forEach(v=>{r=r.split(v).join('█'.repeat(Math.min(8,v.length)));});return r;}
+function procPI(doM){document.getElementById('piBox').classList.remove('on');let o=pendO,m=pendM;if(doM){const cs=[...document.querySelectorAll('#piList input:checked')].map(el=>piC[+el.value].v);o=maskT(o,cs);m=maskT(m,cs);}runG(o,m);}
+
+/* ══ 규칙 ══ */
+const RULES=[{ti:'입금자명 지정 요구',sc:99,kw:['계정명','공연성함','공연 성함','경기명','공연명','성함 본인','성함본인'],p:[/입금자명.{0,25}(계정명|공연명|공연\s*성함|성함|경기명)/i,/(계정명|공연명|공연\s*성함|경기명)으로\s*(입금|이체|송금)/i,/(성함|이름).{0,10}(본인|직접).{0,15}(입금|이체|송금)/i,/본인\s*(성함|이름)\s*(으로|로)\s*(입금|이체|송금)/i,/계정명으로/i,/공연성함으로/i,/경기명으로/i],rs:'입금자명을 계정명·공연명·경기명·성함 본인으로 지정하는 방식은 재입금 유도 사기의 핵심 시작점입니다.'},{ti:'재입금 유도',sc:94,kw:['재입금','다시 입금','다시 보내'],p:[/재입금/i,/다시\s*(입금|이체|송금|보내)/i,/한\s*번\s*더\s*(입금|보내)/i,/(명의|입금자명|성함|이름).{0,30}(오류|잘못|인식|불가|다르)/i,/(오류|인식\s*불가|다르게).{0,30}(다시|재|입금|보내)/i,/업체.{0,30}(인식|확인).{0,20}(안|불가|못)/i],rs:'이미 입금했는데 오류를 이유로 다시 보내라고 하면 사기 가능성이 매우 높습니다.'},{ti:'환불 조건부 추가 입금',sc:96,kw:['환불','환급','자동 환불'],p:[/(환불|환급).{0,35}(입금|보내|이체)/i,/(입금|보내).{0,35}(환불|환급|돌려)/i,/(자동|즉시|바로).{0,15}환불/i,/환불\s*(계좌|번호)\s*(알려|보내|남겨)/i,/(처음|기존).{0,20}(금액|돈).{0,20}(환불|돌려)/i],rs:'환불받으려면 돈을 더 넣으라는 구조는 대표적인 추가 피해 유도 패턴입니다.'},{ti:'수수료·정산·인증 핑계',sc:86,kw:['수수료','금원인증','예치금','보증금','오류코드'],p:[/(수수료|예매수수료|정산금액|금원인증|예치금|보증금|오류코드).{0,35}(입금|이체|송금|처리)/i,/(미납|미입금|오류).{0,35}(수수료|정산|인증|예치금)/i],rs:'수수료·정산·인증·예치금 명목 추가 입금 요구는 존재하지 않는 절차입니다.'},{ti:'선입금 요구',sc:83,kw:['선입금','먼저 입금'],p:[/선입금/i,/먼저\s*(입금|이체|송금)/i,/입금\s*먼저/i,/(댈티|대리티켓팅).{0,35}(선입금|먼저|입금)/i],rs:'대리티켓팅 정상 방식은 성공 후 구매자가 직접 결제하는 것입니다.'},{ti:'아옮 개인정보 요구',sc:90,kw:['아옮','아이디 옮기기','비밀번호','생년월일'],p:[/(아옮|아이디\s*옮기기).{0,45}(아이디|비밀번호|비번|생년월일|연락처|전화번호)/i,/(비밀번호|비번|생년월일).{0,45}(아옮|아이디\s*옮기기)/i],rs:'아이디 옮기기를 이유로 로그인 정보를 요구하면 계정 도용 피해로 이어집니다.'},{ti:'IP 중복·로그인 제한',sc:78,kw:['IP 중복','강제취소'],p:[/IP\s*중복|아이피\s*중복/i,/(24시간|하루).{0,30}(로그인|접속).{0,20}(금지|마세요)/i,/강제취소/i],rs:'"IP 중복으로 취소된다"는 말은 존재하지 않는 규정입니다.'},{ti:'외부 채널 이동',sc:68,kw:['텔레그램'],p:[/텔레그램/i,/라이온티켓|옐로우페이/i],rs:'외부 채널로 이동하면 추적·신고가 어려워집니다.'},{ti:'신뢰 위장',sc:55,kw:['관계자','무사고'],p:[/(관계자|에스코트|무사고|법인계좌)/i,/(몇년째|장난\s*안|걱정\s*마)/i],rs:'팔로워가 많거나 오래된 계정이라도 안심할 수 없습니다.'}];
+function getLv(p){return p>=85?'매우 위험':p>=65?'위험':p>=35?'주의':'낮음';}
+function getClr(p){return p>=85?'#e8341a':p>=65?'#ea580c':p>=35?'#c47c00':'#15803d';}
+function getBg(p){return p>=85?['#ffe5e1','#e8341a']:p>=65?['#fff3e8','#ea580c']:p>=35?['#fff8db','#c47c00']:['#eef9f0','#15803d'];}
+function getActs(p){if(p>=85)return['추가 입금을 요구한다면 즉시 멈추세요!','대화·계좌번호·게시글·입금내역을 캡처해 보관하세요.','더치트 신고 및 ECRM 접수를 준비하세요.','경찰 신고 시 계좌 지급정지도 함께 요청하세요.'];if(p>=65)return['입금 전 더치트에서 계좌·닉네임·전화번호를 검색하세요.','요구하는 절차가 정상인지 다시 확인하세요.'];return['입금 전 더치트·Tiki에서 계좌와 트위터 계정을 확인하세요.'];}
+function getTips(){return['계좌 조회: 더치트에서 계좌번호와 전화번호를 검색하세요.','계정 조회: Tiki(tikigate.com)에서 트위터 계정 변경 이력을 확인하세요.'];}
+
+function runDemoAnalysis(opText){
+  const hits=[];RULES.forEach(r=>{const matched=r.p.find(re=>re.test(opText));if(matched){const m=opText.match(matched);let q='';if(m){const s=Math.max(0,m.index-20),e=Math.min(opText.length,m.index+m[0].length+50);q=opText.slice(s,e).trim();}let bq=eH(q);(r.kw||[]).forEach(k=>{bq=bq.replace(new RegExp(eRe(eH(k)),'gi'),v=>`<b>${v}</b>`);});hits.push({...r,q,bq});}});
+  const dbHits=checkScamDB(opText);const savAccs=findAccounts(opText);
+  let prob=hits.length?Math.max(...hits.map(h=>h.sc))+Math.min(10,(hits.length-1)*3):0;
+  const ts=hits.map(h=>h.ti);
+  if(ts.includes('입금자명 지정 요구')&&ts.includes('재입금 유도'))prob=Math.max(prob,96);
+  if(ts.includes('환불 조건부 추가 입금')&&ts.includes('재입금 유도'))prob=Math.max(prob,97);
+  if(ts.includes('아옮 개인정보 요구'))prob=Math.max(prob,90);
+  if(dbHits.length)prob=Math.max(prob,95);if(savAccs.length)prob=Math.max(prob,60);prob=Math.min(99,prob);
+  return{probability:prob,level:getLv(prob),summary:prob>=85?'알려진 사기 수법 또는 사기꾼과 관련된 거래입니다.':(hits.length?'사기 수법으로 이어질 수 있는 행동 유도가 감지되었습니다.':'뚜렷한 위험 신호는 감지되지 않았습니다.'),hits,scamDBHits:dbHits,savingsAccs:savAccs,actions:getActs(prob),safeNote:getTips()};
+}
+function normProb(raw){let p=Number(raw||0);if(p>0&&p<=1)p=Math.round(p*100);return Math.min(99,Math.max(0,Math.round(p)));}
+
+function renderRes(data,isImg){
+  const p=normProb(data.probability);const lv=data.level||getLv(p),clr=getClr(p);const [bg,fg]=getBg(p);
+  document.getElementById('rEmpty').style.display='none';
+  const rc=document.getElementById('rContent');rc.style.display='block';
+  rc.innerHTML=`<div class="result-card" id="resultCard"></div>`;
+  const card=document.getElementById('resultCard');
+
+  // 데이터 먼저 확보
+  const dbHits=data.scamDBHits||[];
+  const savAccs=data.savingsAccs||[];
+  const hits=data.hits||[];
+
+  // 감지된 유형 불릿 집계
+  const typeCounts={};
+  hits.forEach(h=>{const ti=h.ti||h.title||'';if(ti)typeCounts[ti]=(typeCounts[ti]||0)+1;});
+  dbHits.forEach(h=>{
+    const label=h.type==='account'?'사기 이력 계좌':h.type==='name'?'사기 예금주 이름':h.type==='twitter'?'사기 계정 아이디':'';
+    if(label)typeCounts[label]=(typeCounts[label]||0)+1;
+  });
+  const typeKeys=Object.keys(typeCounts);
+  const typeSummaryHtml=typeKeys.length>0
+    ? typeKeys.map(k=>`<div class="type-bullet">· ${eH(k)}${typeCounts[k]>1?' ('+typeCounts[k]+'회)':''}</div>`).join('')
+    : `<div class="type-bullet-none">${eH(data.summary||'뚜렷한 위험 신호가 없습니다.')}</div>`;
+
+  card.innerHTML=`<div class="rsk-head"><div class="rsk-row"><div class="rsk-pct" style="color:${clr}">${p}%</div><div class="rsk-rhs"><div class="r-badge" style="background:${bg};color:${fg}">${eH(lv)}</div><div class="r-type-list">${typeSummaryHtml}</div></div></div></div><div class="bar-bg"><div class="bar-fill" id="rBar" style="background:${clr}"></div></div>`;
+  setTimeout(()=>{const b=document.getElementById('rBar');if(b)b.style.width=p+'%';},60);
+
+  if(dbHits.length)dbHits.forEach(h=>{let msg='';if(h.type==='account')msg=`<strong>사기 이력이 있는 계좌 감지</strong>${eH(h.data.bank)} ${eH(h.data.account)} (${eH(h.data.name)}) — 즉시 거래를 중단하세요.`;else if(h.type==='name')msg=`<strong>사기 계좌 예금주 이름 감지</strong>"${eH(h.matched)}"`;else if(h.type==='twitter')msg=`<strong>사기 이력이 있는 계정 감지</strong>${eH(h.matched)}`;if(msg)card.innerHTML+=`<div class="warn-banner red">${msg}</div>`;});
+  if(savAccs.length)savAccs.forEach(s=>{card.innerHTML+=`<div class="warn-banner orange"><strong>적금 계좌 의심 (${eH(s.bank)})</strong>${eH(s.raw)} — 더치트에 잡히지 않는 신규 사기 계좌일 수 있습니다.</div>`;});
+
+  if(hits.length){
+    card.innerHTML+=`<div class="pat-sec"><div class="pat-sec-ttl"><span class="mi" style="color:var(--red);font-size:22px;vertical-align:middle;margin-right:6px">warning</span>감지된 위험 신호 (${hits.length}건)</div><div class="pat-list" id="patList"></div></div>`;
+    const pl=document.getElementById('patList');
+    hits.forEach((h,i)=>{
+      const hi=(h.sc||h.score||0)>=85,md=(h.sc||h.score||0)>=65;
+      const quote=h.bq||eH(h.q||h.quote||'');
+      const bubHtml=quote?`<div class="pat-bub-label">감지된 문장</div><div class="pat-bubble" onclick="scrollToRawHit(${i})">${quote}</div>${!isImg?'<div class="pat-bubble-hint">↑ 클릭하면 원문 위치로 이동</div>':''}`:'';
+      pl.innerHTML+=`<div class="pat-card ${hi?'hi':md?'md':''}" id="patCard${i}"><div class="pat-head"><div class="pat-no ${hi?'hi':md?'md':'lo'}">${i+1}</div><div class="pat-ttl">${eH(h.ti||h.title||'')}</div></div><div class="pat-why">${eH(h.rs||h.reason||'')}</div>${bubHtml}</div>`;
+    });
+    if(!isImg)renderRawHl(hits);
+  }else if(!dbHits.length&&!savAccs.length){card.innerHTML+=`<div style="padding:10px 20px"><p style="font-size:12px;color:#888">뚜렷한 위험 키워드가 감지되지 않았습니다. 그래도 입금 전 계좌와 계정을 반드시 검색하세요.</p></div>`;}
+
+  card.innerHTML+=`<div class="bot-sec"><div class="act-box action"><div class="act-ttl"><span class="mi sm" style="vertical-align:middle;margin-right:4px">bolt</span> 지금 해야 할 것</div>${(data.actions||getActs(p)).map(a=>`<div class="act-row"><div class="act-dot"></div><span>${eH(a)}</span></div>`).join('')}</div><div class="act-box tip"><div class="act-ttl"><span class="mi sm" style="vertical-align:middle;margin-right:4px">search</span> 한 번 더 확인하기</div>${(Array.isArray(data.safeNote)?data.safeNote:getTips()).map(t=>`<div class="act-row"><div class="act-dot"></div><span>${eH(t)}</span></div>`).join('')}</div><div class="ext-row"><a href="https://thecheat.co.kr" target="_blank" class="ext-pill">더치트 조회</a><a href="https://www.tikigate.com/" target="_blank" class="ext-pill">Tiki 계정 조회</a><a href="https://ecrm.police.go.kr" target="_blank" class="ext-pill">ECRM 신고</a></div></div>`;
+  const btn=document.getElementById('subBtn');btn.innerHTML='<span class="mi sm" style="vertical-align:middle;margin-right:4px">refresh</span> 다시 분석하기';btn.disabled=false;
+  setTimeout(()=>rc.scrollIntoView({behavior:'smooth',block:'start'}),200);
+}
+
+function scrollToRawHit(idx){const el=document.getElementById('rawHit'+idx);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.outline='2px solid var(--red)';setTimeout(()=>el.style.outline='',1200);}}
+function setLd(on){const b=document.getElementById('subBtn');b.disabled=on;b.innerHTML=on?'분석 중...':'<span class="mi sm" style="vertical-align:middle;margin-right:4px">manage_search</span> 분석하기';}
+function showErr(msg){document.getElementById('rEmpty').style.display='none';const rc=document.getElementById('rContent');rc.style.display='block';rc.innerHTML=`<div class="result-card" style="padding:16px"><div class="warn-banner red" style="margin:0"><strong>분석 실패</strong>${eH(msg)}</div></div>`;document.getElementById('subBtn').innerHTML='<span class="mi sm" style="vertical-align:middle;margin-right:4px">manage_search</span> 분석하기';document.getElementById('subBtn').disabled=false;}
+function showLim(){document.getElementById('rEmpty').style.display='none';const rc=document.getElementById('rContent');rc.style.display='block';rc.innerHTML=`<div class="result-card" style="padding:16px"><div class="warn-banner orange" style="margin:0"><strong>오늘 분석 한도 소진</strong><a href="mailto:dotolimuk100@gmail.com" style="color:var(--red);font-weight:700">이메일</a>로 문의해주세요.</div></div>`;}
+
+async function runAna(){
+  document.getElementById('piBox').classList.remove('on');document.getElementById('rContent').style.display='none';document.getElementById('rEmpty').style.display='block';document.getElementById('rEmpty').innerHTML='<div class="ic">🔍</div>분석 결과가 여기에 표시됩니다.';
+  if(inMode==='image'){if(!imgs.length){alert('이미지를 추가해주세요.');return;}await runImgAna();return;}
+  const opText=getOpText(),myText=getMyText();if(!opText){alert('대화를 입력해주세요.');return;}
+  if(anaMode==='demo'){renderRes(runDemoAnalysis(opText),false);return;}
+  const q=getQ();if(q.c>=DAILY){showLim();return;}
+  piC=detPI(opText);
+  if(piC.length){pendO=opText;pendM=myText;document.getElementById('piList').innerHTML=piC.map((p,i)=>`<label class="pi-item"><input type="checkbox" value="${i}"> ${eH(p.tp)}: <mark>${eH(p.v)}</mark></label>`).join('');document.getElementById('piBox').classList.add('on');return;}
+  pendO=opText;pendM=myText;await runG(opText,myText);
+}
+
+async function runG(opText,myText){
+  const q=getQ();if(q.c>=DAILY){showLim();return;}
+  setLd(true);document.getElementById('rEmpty').textContent='정밀 분석 중입니다...';document.getElementById('rContent').style.display='none';
+  const hasBub=bubbles.length>0;
+  const scamAccList=SCAM_ACCOUNTS.map(s=>`${s.bank} ${s.account} ${s.name}(${s.initial})`).join(', ');
+  const prompt=`너는 한국 티켓 양도 사기 판별 도구다.\n${hasBub?'사용자가 화자를 직접 분류했다. [상대방] 대사 중심으로 판별.':'전체 대화다. 판매자(사기 의심자)의 말 중심으로 판별.'}\n알려진 사기 계좌: ${scamAccList}\n위 계좌번호·예금주 이름·초성이 나오면 즉시 95점 이상.\n계정명/공연성함/경기명/성함본인 입금자명 지정 또는 재입금 유도→85점+. 2개 이상→95점+. 말투만으로 70점+ 주지 않는다.\nprobability는 반드시 0~100 정수. 절대 소수 금지.\n반드시 JSON만: {"probability":정수,"level":"낮음|주의|위험|매우 위험","summary":"한 문장","hits":[{"title":"","quote":"원문 그대로","score":0,"reason":""}],"actions":[""],"safeNote":[""]}\nquote 필드는 반드시 원문에서 실제 감지된 문장 그대로.\n${hasBub?`[상대방]\n${opText}\n[나]\n${myText||'없음'}`:opText}`;
+  try{const dbHits=checkScamDB(opText);const savAccs=findAccounts(opText);const d=await callG([{text:prompt}]);q.c++;saveQ(q);d.scamDBHits=dbHits;d.savingsAccs=savAccs;if(dbHits.length)d.probability=Math.max(normProb(d.probability),95);if(savAccs.length)d.probability=Math.max(normProb(d.probability),60);d.probability=normProb(d.probability);d.level=getLv(d.probability);renderRes(d,false);}catch(e){showErr(e.message);}finally{setLd(false);}
+}
+
+async function runImgAna(){
+  const q=getQ();if(q.c>=DAILY){showLim();return;}
+  setLd(true);document.getElementById('rEmpty').textContent='이미지 분석 중입니다...';document.getElementById('rContent').style.display='none';
+  const ov=document.getElementById('imgLoadingOverlay');const sub=document.getElementById('iloSub');ov.classList.add('on');
+  const msgs=['AI가 대화 내용을 읽고 있어요','사기 패턴을 분석하고 있어요','위험 신호를 탐지하고 있어요','결과를 정리하고 있어요'];
+  let mi=0;const mt=setInterval(()=>{mi=(mi+1)%msgs.length;sub.textContent=msgs[mi];},3000);
+  try{const parts=[{text:`한국 티켓 양도 사기 판별. 트위터 DM: 오른쪽=구매자, 왼쪽=판매자. 판매자 말 중심 판별.\nprobability는 반드시 0~100 정수. 절대 소수 금지.\nquote 필드는 이미지에서 실제 감지된 문장 원문 그대로.\nextractedLines 필드에 이미지에서 읽은 모든 대화 텍스트를 줄 단위 배열로 포함.\n반드시 JSON만: {"probability":정수,"level":"낮음|주의|위험|매우 위험","summary":"한 문장","hits":[{"title":"","quote":"","score":0,"reason":""}],"actions":[""],"safeNote":[""],"extractedLines":["줄1","줄2"]}`},...imgs.map(f=>({inlineData:{mimeType:f.mime,data:f.base64}}))];const d=await callG(parts);q.c++;saveQ(q);d.scamDBHits=[];d.savingsAccs=[];d.probability=normProb(d.probability);d.level=getLv(d.probability);if(d.extractedLines&&d.extractedLines.length){document.getElementById('extractedWrap').classList.add('on');document.getElementById('extractedBody').textContent=d.extractedLines.join('\n');}renderRes(d,true);}catch(e){showErr(e.message);}finally{clearInterval(mt);ov.classList.remove('on');setLd(false);}
+}
+
+async function callG(parts){
+  let res;
+  try {
+    res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { temperature: 0.2 }
+      })
+    });
+  } catch(networkErr) {
+    throw new Error('네트워크 오류: ' + networkErr.message + '\n/api/analyze 경로를 찾을 수 없습니다. Vercel 배포 후 사용해주세요.');
+  }
+  let data;
+  try { data = await res.json(); } catch { throw new Error('서버 응답을 파싱할 수 없습니다.'); }
+  if (!res.ok) {
+    const msg = data?.error?.message || data?.error || JSON.stringify(data);
+    if (res.status === 429) throw new Error('API 사용량 한도 초과. 잠시 후 다시 시도해주세요.');
+    throw new Error('API 오류 ' + res.status + ': ' + msg);
+  }
+  let raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+  raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+  try { return JSON.parse(raw); }
+  catch { throw new Error('AI 응답을 해석하지 못했습니다. 다시 시도해주세요.'); }
+}
+
+function eH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function eRe(s){return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
+function openMultitabModal(){document.getElementById('multitabModal').style.display='flex';}
+
+runHeroAnim();
+</script>
+</body>
+</html>
